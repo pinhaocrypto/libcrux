@@ -24,6 +24,49 @@ fn main() {
         // We don't enable this on x86 because it seems to generate invalid code.
         println!("cargo:rustc-cfg=feature=\"simd256\"");
     }
+
+    // Build cycle counter C library for benchmarks
+    build_cycle_counter();
+}
+
+fn build_cycle_counter() {
+    let mut build = cc::Build::new();
+    
+    build.file("benches/cycle_counter/hal.c");
+    
+    // set PMU_CYCLES or MAC_CYCLES based on target_os
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    
+    match target_os.as_str() {
+        "linux" => {
+            // use PMU_CYCLES by default
+            build.define("PMU_CYCLES", None);
+        }
+        "macos" => {
+            build.define("MAC_CYCLES", None);
+        }
+        _ => {
+            // fallback to time measurement
+            println!("cargo:warning=Using fallback time measurement for {}", target_os);
+        }
+    }
+    
+    // architecture specific configuration
+    match target_arch.as_str() {
+        "x86_64" | "aarch64" => {
+            // PMU_CYCLES is set in OS check
+        }
+        _ => {
+            println!("cargo:warning=Cycle counter may not be accurate on {}", target_arch);
+        }
+    }
+    
+    build.compile("cycle_counter");
+    
+    // tell cargo to rebuild when these files change
+    println!("cargo:rerun-if-changed=benches/cycle_counter/hal.c");
+    println!("cargo:rerun-if-changed=benches/cycle_counter/hal.h");
 }
 
 fn read_env(key: &str) -> bool {
