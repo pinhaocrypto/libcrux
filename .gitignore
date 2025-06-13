@@ -19,3 +19,6 @@ Cargo.lock
 /proofs/fstar/*/#*#
 /proofs/fstar/*/.#*
 hax.fst.config.json
+
+# cursor
+.cursorrules

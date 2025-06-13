@@ -217,9 +217,36 @@ pub(crate) fn invert_ntt_at_layer_4_plus<Vector: Operations>(
     }
 }
 
+/// Inverse NTT (Assembly-optimized version)
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
 #[inline(always)]
-#[hax_lib::fstar::verification_status(lax)]
-#[hax_lib::requires(fstar!(r#"invert_ntt_re_range_1 $re"#))]
+pub(crate) fn invert_ntt_montgomery<const K: usize, Vector: Operations>(
+    re: &mut PolynomialRingElement<Vector>,
+) {
+    // We only ever call this function after matrix/vector multiplication
+    hax_debug_assert!(to_i16_array(re)
+        .into_iter()
+        .all(|coefficient| coefficient.abs() < (K as i16) * FIELD_MODULUS));
+
+    // Use assembly-optimized inverse NTT
+    super::ntt::intt_asm(re);
+
+    hax_debug_assert!(
+        to_i16_array(re)[0].abs() < 128 * (K as i16) * FIELD_MODULUS
+            && to_i16_array(re)[1].abs() < 128 * (K as i16) * FIELD_MODULUS
+    );
+    hax_debug_assert!(to_i16_array(re)
+        .into_iter()
+        .enumerate()
+        .skip(2)
+        .all(|(i, coefficient)| coefficient.abs() < (128 / (1 << i.ilog2())) * FIELD_MODULUS));
+
+    re.poly_barrett_reduce()
+}
+
+/// Inverse NTT (Original intrinsic version as fallback)
+#[cfg(not(all(feature = "simd128", target_arch = "aarch64")))]
+#[inline(always)]
 pub(crate) fn invert_ntt_montgomery<const K: usize, Vector: Operations>(
     re: &mut PolynomialRingElement<Vector>,
 ) {

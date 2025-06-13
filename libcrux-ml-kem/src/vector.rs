@@ -11,7 +11,8 @@
 
 pub(crate) mod traits;
 pub(crate) use traits::{
-    Operations, FIELD_ELEMENTS_IN_VECTOR, FIELD_MODULUS, MONTGOMERY_R_SQUARED_MOD_FIELD_MODULUS,
+    Operations, FIELD_ELEMENTS_IN_VECTOR, FIELD_MODULUS, INVERSE_OF_MODULUS_MOD_MONTGOMERY_R,
+    MONTGOMERY_R_SQUARED_MOD_FIELD_MODULUS,
 };
 
 // XXX: This is not used on neon right now
@@ -24,12 +25,16 @@ pub(crate) mod rej_sample_table;
 // The consumer needs to use runtime feature detection and the appropriate vector
 // in each case.
 #[cfg(feature = "simd128")]
-mod neon;
+pub(crate) mod neon;
 #[cfg(feature = "simd128")]
-pub(crate) use neon::SIMD128Vector;
+pub(crate) use neon::*;
 #[cfg(feature = "simd256")]
 mod avx2;
 #[cfg(feature = "simd256")]
-pub(crate) use avx2::SIMD256Vector;
+pub(crate) use avx2::*;
 
-pub mod portable;
+// Make portable module available for compatibility
+pub(crate) mod portable;
+
+#[cfg(not(any(feature = "simd128", feature = "simd256")))]
+pub(crate) use portable::*;

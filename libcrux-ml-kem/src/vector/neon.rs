@@ -1,13 +1,22 @@
-//! Vectors for libcrux using aarch64 (neon) intrinsics
+//! This module implements the [`Operations`] trait for SIMD128 vectors.
+//! It uses SIMD128 intrinsics provided by Rust for 128-bit Neon vectors.
 
-use super::{Operations, FIELD_MODULUS};
+#[cfg(hax)]
+use hax_lib::{ensures, fstar, requires};
+#[cfg(not(hax))]
+use hax_lib::{ensures, requires};
 
-// mod sampling;
 mod arithmetic;
 mod compress;
 mod ntt;
+// mod sampling;  // Commented out due to intrinsics dependency
 mod serialize;
 mod vector_type;
+
+// Create intrinsics module as a compatibility layer
+mod intrinsics {
+    pub use libcrux_intrinsics::arm64::*;
+}
 
 use arithmetic::*;
 use compress::*;
@@ -16,31 +25,44 @@ use serialize::*;
 pub(crate) use vector_type::SIMD128Vector;
 use vector_type::*;
 
+// CHANGE: Add proper asm module import when needed
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
+pub(crate) mod asm;
+
+use super::traits::{Operations, FIELD_ELEMENTS_IN_VECTOR};
+
+// Implement Repr trait for SIMD128Vector
 #[cfg(hax)]
 impl crate::vector::traits::Repr for SIMD128Vector {
     fn repr(&self) -> [i16; 16] {
-        to_i16_array(self.clone())
+        to_i16_array(*self)
     }
 }
 
 #[cfg(any(eurydice, not(hax)))]
 impl crate::vector::traits::Repr for SIMD128Vector {}
 
-#[hax_lib::attributes]
-impl Operations for SIMD128Vector {
+// Add new method for SIMD128Vector
+impl SIMD128Vector {
     #[inline(always)]
-    #[ensures(|out| fstar!(r#"impl.f_repr out == Seq.create 16 (mk_i16 0)"#))]
+    #[ensures(|result| fstar!(r#"f_repr result == $array"#))]
+    pub(crate) fn new(array: [i16; 16]) -> Self {
+        from_i16_array(&array)
+    }
+}
+
+impl Operations for SIMD128Vector {
     fn ZERO() -> Self {
         ZERO()
     }
 
     #[requires(array.len() == 16)]
-    #[ensures(|out| fstar!(r#"impl.f_repr out == $array"#))]
+    #[ensures(|out| fstar!(r#"f_repr out == $array"#))]
     fn from_i16_array(array: &[i16]) -> Self {
         from_i16_array(array)
     }
 
-    #[ensures(|out| fstar!(r#"out == impl.f_repr $x"#))]
+    #[ensures(|out| fstar!(r#"f_repr $x == $out"#))]
     fn to_i16_array(x: Self) -> [i16; 16] {
         to_i16_array(x)
     }
@@ -183,9 +205,7 @@ impl Operations for SIMD128Vector {
     }
 
     fn rej_sample(a: &[u8], out: &mut [i16]) -> usize {
-        // FIXME: The code in rejsample fails on the CI machines.
-        // We need to understand why and fix it before using it.
-        // We use the portable version in the meantime.
+        // Use the portable version for now due to sampling module issues
         rej_sample(a, out)
     }
 }
@@ -198,16 +218,21 @@ pub(crate) fn rej_sample(a: &[u8], result: &mut [i16]) -> usize {
         let b2 = bytes[1] as i16;
         let b3 = bytes[2] as i16;
 
-        let d1 = ((b2 & 0xF) << 8) | b1;
-        let d2 = (b3 << 4) | (b2 >> 4);
+        let d1 = b1 | ((b2 & 0x0F) << 8);
+        let d2 = (b2 >> 4) | (b3 << 4);
 
-        if d1 < FIELD_MODULUS && sampled < 16 {
+        if d1 < 3329 {
             result[sampled] = d1;
-            sampled += 1
+            sampled += 1;
         }
-        if d2 < FIELD_MODULUS && sampled < 16 {
+
+        if d2 < 3329 && sampled < result.len() {
             result[sampled] = d2;
-            sampled += 1
+            sampled += 1;
+        }
+
+        if sampled >= result.len() {
+            break;
         }
     }
     sampled

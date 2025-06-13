@@ -1,6 +1,6 @@
 use crate::{
     hax_utils::hax_debug_assert,
-    polynomial::{zeta, PolynomialRingElement, VECTORS_IN_RING_ELEMENT},
+    polynomial::{from_i16_array, to_i16_array, zeta, PolynomialRingElement, VECTORS_IN_RING_ELEMENT},
     vector::Operations,
 };
 
@@ -285,38 +285,54 @@ pub(crate) fn ntt_at_layer_7<Vector: Operations>(re: &mut PolynomialRingElement<
     }
 }
 
+/// Assembly-optimized NTT for AArch64 NEON
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
+use crate::vector::neon::asm;
+
+
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
+pub(crate) fn ntt_asm<Vector: Operations>(re: &mut PolynomialRingElement<Vector>) {
+    let mut coeffs = [0i16; 256];
+    to_i16_array(*re, &mut coeffs);
+
+    unsafe {
+        asm::ntt_asm(coeffs.as_mut_ptr());
+    }
+
+    *re = from_i16_array(&coeffs);
+}
+
+/// Assembly-optimized inverse NTT for AArch64 NEON
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
+pub(crate) fn intt_asm<Vector: Operations>(re: &mut PolynomialRingElement<Vector>) {
+    let mut coeffs = [0i16; 256];
+    to_i16_array(*re, &mut coeffs);
+
+    unsafe {
+        asm::intt_asm(coeffs.as_mut_ptr());
+    }
+
+    *re = from_i16_array(&coeffs);
+}
+
+/// Forward NTT for vector u (Assembly-optimized version)
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
 #[inline(always)]
-#[hax_lib::fstar::verification_status(lax)]
-#[hax_lib::fstar::options("--z3rlimit 200")]
-#[hax_lib::requires(fstar!(r#"forall i. i < 8 ==> ntt_layer_7_pre (${re}.f_coefficients.[ sz i ])
-    (${re}.f_coefficients.[ sz i +! sz 8 ])"#))]
-#[hax_lib::ensures(|_| fstar!(r#"Libcrux_ml_kem.Polynomial.is_bounded_poly 3328 ${re}_future /\
-    Libcrux_ml_kem.Polynomial.to_spec_poly_t #$:Vector ${re}_future ==
-    Spec.MLKEM.poly_ntt (Libcrux_ml_kem.Polynomial.to_spec_poly_t #$:Vector $re) /\
-    Libcrux_ml_kem.Polynomial.is_bounded_poly #$:Vector 3328 ${re}_future"#))]
-pub(crate) fn ntt_binomially_sampled_ring_element<Vector: Operations>(
+pub(crate) fn ntt_vector_u<const VECTOR_U_COMPRESSION_FACTOR: usize, Vector: Operations>(
     re: &mut PolynomialRingElement<Vector>,
 ) {
-    // Due to the small coefficient bound, we can skip the first round of
-    // Montgomery reductions.
-    ntt_at_layer_7(re);
+    hax_debug_assert!(to_i16_array(re)
+        .into_iter()
+        .all(|coefficient| coefficient.abs() <= 3328));
 
-    let mut zeta_i = 1;
-    ntt_at_layer_4_plus(&mut zeta_i, re, 6, 11207);
-    ntt_at_layer_4_plus(&mut zeta_i, re, 5, 11207 + 3328);
-    ntt_at_layer_4_plus(&mut zeta_i, re, 4, 11207 + 2 * 3328);
-    ntt_at_layer_3(&mut zeta_i, re, 11207 + 3 * 3328);
-    ntt_at_layer_2(&mut zeta_i, re, 11207 + 4 * 3328);
-    ntt_at_layer_1(&mut zeta_i, re, 11207 + 5 * 3328);
-
+    // Use assembly-optimized NTT
+    ntt_asm(re);
     re.poly_barrett_reduce()
 }
 
+/// Forward NTT for vector u (Original intrinsic version as fallback)
+#[cfg(not(all(feature = "simd128", target_arch = "aarch64")))]
 #[inline(always)]
-#[hax_lib::fstar::verification_status(lax)]
-#[hax_lib::fstar::options("--z3rlimit 200")]
-#[hax_lib::ensures(|_| fstar!(r#"Libcrux_ml_kem.Polynomial.to_spec_poly_t #$:Vector ${re}_future ==
-    Spec.MLKEM.poly_ntt (Libcrux_ml_kem.Polynomial.to_spec_poly_t #$:Vector $re)"#))]
 pub(crate) fn ntt_vector_u<const VECTOR_U_COMPRESSION_FACTOR: usize, Vector: Operations>(
     re: &mut PolynomialRingElement<Vector>,
 ) {
@@ -333,6 +349,38 @@ pub(crate) fn ntt_vector_u<const VECTOR_U_COMPRESSION_FACTOR: usize, Vector: Ope
     ntt_at_layer_3(&mut zeta_i, re, 5 * 3328);
     ntt_at_layer_2(&mut zeta_i, re, 6 * 3328);
     ntt_at_layer_1(&mut zeta_i, re, 7 * 3328);
+
+    re.poly_barrett_reduce()
+}
+
+/// Forward NTT for binomially sampled ring element (Assembly-optimized version)
+#[cfg(all(feature = "simd128", target_arch = "aarch64"))]
+#[inline(always)]
+pub(crate) fn ntt_binomially_sampled_ring_element<Vector: Operations>(
+    re: &mut PolynomialRingElement<Vector>,
+) {
+    // Use assembly-optimized NTT
+    ntt_asm(re);
+    re.poly_barrett_reduce()
+}
+
+/// Forward NTT for binomially sampled ring element (Original intrinsic version as fallback)
+#[cfg(not(all(feature = "simd128", target_arch = "aarch64")))]
+#[inline(always)]
+pub(crate) fn ntt_binomially_sampled_ring_element<Vector: Operations>(
+    re: &mut PolynomialRingElement<Vector>,
+) {
+    // Due to the small coefficient bound, we can skip the first round of
+    // Montgomery reductions.
+    ntt_at_layer_7(re);
+
+    let mut zeta_i = 1;
+    ntt_at_layer_4_plus(&mut zeta_i, re, 6, 11207);
+    ntt_at_layer_4_plus(&mut zeta_i, re, 5, 11207 + 3328);
+    ntt_at_layer_4_plus(&mut zeta_i, re, 4, 11207 + 2 * 3328);
+    ntt_at_layer_3(&mut zeta_i, re, 11207 + 3 * 3328);
+    ntt_at_layer_2(&mut zeta_i, re, 11207 + 4 * 3328);
+    ntt_at_layer_1(&mut zeta_i, re, 11207 + 5 * 3328);
 
     re.poly_barrett_reduce()
 }

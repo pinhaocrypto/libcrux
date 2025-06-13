@@ -74,7 +74,7 @@ fn ZERO<Vector: Operations>() -> PolynomialRingElement<Vector> {
 
 #[inline(always)]
 #[hax_lib::requires(VECTORS_IN_RING_ELEMENT * 16 <= a.len())]
-fn from_i16_array<Vector: Operations>(a: &[i16]) -> PolynomialRingElement<Vector> {
+pub(crate) fn from_i16_array<Vector: Operations>(a: &[i16]) -> PolynomialRingElement<Vector> {
     let mut result = ZERO();
     for i in 0..VECTORS_IN_RING_ELEMENT {
         result.coefficients[i] = Vector::from_i16_array(&a[i * 16..(i + 1) * 16]);
@@ -85,7 +85,7 @@ fn from_i16_array<Vector: Operations>(a: &[i16]) -> PolynomialRingElement<Vector
 #[allow(dead_code)]
 #[inline(always)]
 #[hax_lib::requires(out.len() >= VECTORS_IN_RING_ELEMENT * 16)]
-fn to_i16_array<Vector: Operations>(re: PolynomialRingElement<Vector>, out: &mut [i16]) {
+pub(crate) fn to_i16_array<Vector: Operations>(re: PolynomialRingElement<Vector>, out: &mut [i16]) {
     #[cfg(hax)]
     let _out_len = out.len();
 

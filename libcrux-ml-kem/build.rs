@@ -25,19 +25,54 @@ fn main() {
         println!("cargo:rustc-cfg=feature=\"simd256\"");
     }
 
+    // Build Assembly files for AArch64 NEON
+    build_aarch64_asm();
+
     // Build cycle counter C library for benchmarks
     build_cycle_counter();
 }
 
+fn build_aarch64_asm() {
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+
+    // Only build assembly for aarch64 when simd128 is enabled
+    if target_arch == "aarch64" {
+        let mut build = cc::Build::new();
+
+        // Add assembly files
+        build.file("src/vector/neon/asm/ntt.S");
+        build.file("src/vector/neon/asm/intt.S");
+        build.file("src/vector/neon/asm/aarch64_zetas.c");
+
+        // Set up include paths
+        build.include("src/vector/neon/asm");
+
+        // Enable AArch64 specific flags
+        build.flag("-march=armv8-a+simd");
+
+        // Define macros that might be needed
+        build.define("MLK_ARITH_BACKEND_AARCH64", None);
+
+        // Compile the static library
+        build.compile("mlkem_aarch64_asm");
+
+        // Tell cargo to rerun if assembly files change
+        println!("cargo:rerun-if-changed=src/vector/neon/asm/ntt.S");
+        println!("cargo:rerun-if-changed=src/vector/neon/asm/intt.S");
+        println!("cargo:rerun-if-changed=src/vector/neon/asm/aarch64_zetas.c");
+        println!("cargo:rerun-if-changed=src/vector/neon/asm/arith_native_aarch64.h");
+    }
+}
+
 fn build_cycle_counter() {
     let mut build = cc::Build::new();
-    
+
     build.file("benches/cycle_counter/hal.c");
-    
+
     // set PMU_CYCLES or MAC_CYCLES based on target_os
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    
+
     match target_os.as_str() {
         "linux" => {
             // use PMU_CYCLES by default
@@ -48,22 +83,28 @@ fn build_cycle_counter() {
         }
         _ => {
             // fallback to time measurement
-            println!("cargo:warning=Using fallback time measurement for {}", target_os);
+            println!(
+                "cargo:warning=Using fallback time measurement for {}",
+                target_os
+            );
         }
     }
-    
+
     // architecture specific configuration
     match target_arch.as_str() {
         "x86_64" | "aarch64" => {
             // PMU_CYCLES is set in OS check
         }
         _ => {
-            println!("cargo:warning=Cycle counter may not be accurate on {}", target_arch);
+            println!(
+                "cargo:warning=Cycle counter may not be accurate on {}",
+                target_arch
+            );
         }
     }
-    
+
     build.compile("cycle_counter");
-    
+
     // tell cargo to rebuild when these files change
     println!("cargo:rerun-if-changed=benches/cycle_counter/hal.c");
     println!("cargo:rerun-if-changed=benches/cycle_counter/hal.h");

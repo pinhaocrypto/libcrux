@@ -64,13 +64,32 @@
 //!
 
 #![no_std]
-#![deny(missing_docs)]
-#![deny(unsafe_code)]
-#![warn(rust_2018_idioms, unused_lifetimes, unused_qualifications)]
-#![allow(clippy::needless_range_loop)]
-#![warn(missing_docs)]
-// Enable doc cfg feature for doc builds. They use nightly.
-#![cfg_attr(doc_cfg, feature(doc_cfg))]
+// Allow unsafe code conditionally for assembly integration on aarch64
+#![cfg_attr(
+    not(all(feature = "simd128", target_arch = "aarch64")),
+    forbid(unsafe_code)
+)]
+#![deny(clippy::correctness)]
+#![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::doc_link_with_quotes)]
+#![allow(non_snake_case)]
+#![cfg_attr(not(feature = "hazmat"), forbid(clippy::unwrap_used))]
+#![cfg_attr(not(feature = "hazmat"), forbid(clippy::expect_used))]
+#![cfg_attr(not(feature = "hazmat"), forbid(clippy::panic))]
+#![cfg_attr(not(feature = "hazmat"), forbid(clippy::unreachable))]
 
 #[cfg(feature = "std")]
 extern crate std;
