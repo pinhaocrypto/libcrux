@@ -1,5 +1,5 @@
 use rand::{rngs::OsRng, TryRngCore};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hint::black_box;
 
 use libcrux_ml_kem::{mlkem1024, mlkem512, mlkem768};
@@ -295,20 +295,24 @@ fn print_results(all_results: &[BenchmarkStats], security_level: u16) {
             .push(stats);
     }
 
-    // print average
-    for (op, stats_list) in &by_operation {
-        if let Some(stats) = stats_list.first() {
-            stats.print_results();
+    let operation_order = ["keypair", "encaps", "decaps"];
+
+    for &op in &operation_order {
+        if let Some(stats_list) = by_operation.get(op) {
+            if let Some(stats) = stats_list.first() {
+                stats.print_results();
+            }
         }
     }
 
     println!();
     println!("           percentile      1     10     20     30     40     50     60     70     80     90     99");
 
-    // print percentiles
-    for (op, stats_list) in &by_operation {
-        if let Some(stats) = stats_list.first() {
-            stats.print_percentiles();
+    for &op in &operation_order {
+        if let Some(stats_list) = by_operation.get(op) {
+            if let Some(stats) = stats_list.first() {
+                stats.print_percentiles();
+            }
         }
     }
 
