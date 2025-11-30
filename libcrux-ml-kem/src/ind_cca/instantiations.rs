@@ -527,3 +527,4 @@ pub mod avx2;
 // NEON generic implementation.
 #[cfg(feature = "simd128")]
 instantiate! {neon, crate::vector::SIMD128Vector, crate::hash_functions::neon::Simd128Hash}
+

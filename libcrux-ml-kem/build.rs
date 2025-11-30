@@ -24,6 +24,65 @@ fn main() {
         // We don't enable this on x86 because it seems to generate invalid code.
         println!("cargo:rustc-cfg=feature=\"simd256\"");
     }
+
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+
+    // Only build cycle counter support for supported platforms
+    if target_arch == "aarch64" || target_arch == "x86_64" {
+        println!("cargo:rerun-if-changed=benches/cycle_counter/hal.c");
+
+        let mut build = cc::Build::new();
+        build.file("benches/cycle_counter/hal.c");
+
+        // Check for manual CYCLES override first
+        let cycles_override = env::var("CYCLES").ok();
+
+        // Set cycle counter implementation based on CYCLES env var or platform
+        match cycles_override.as_deref() {
+            Some("PMU") => {
+                println!("cargo:warning=Using PMU cycles (manual override)");
+                build.define("PMU_CYCLES", None);
+            }
+            Some("PERF") => {
+                println!("cargo:warning=Using PERF cycles (manual override)");
+                build.define("PERF_CYCLES", None);
+            }
+            Some("MAC") => {
+                println!("cargo:warning=Using MAC cycles (manual override)");
+                build.define("MAC_CYCLES", None);
+            }
+            _ => {
+                // Auto-detect based on platform
+                match target_os.as_str() {
+                    "linux" => {
+                        if target_arch == "aarch64" {
+                            println!(
+                                "cargo:warning=Using PMU cycles (auto-detected for Linux AArch64)"
+                            );
+                            build.define("PMU_CYCLES", None);
+                        } else {
+                            println!(
+                                "cargo:warning=Using PERF cycles (auto-detected for Linux x86_64)"
+                            );
+                            build.define("PERF_CYCLES", None);
+                        }
+                    }
+                    "macos" => {
+                        println!("cargo:warning=Using MAC cycles (auto-detected for macOS)");
+                        build.define("MAC_CYCLES", None);
+                    }
+                    _ => {
+                        println!("cargo:warning=Using PMU cycles (fallback)");
+                        build.define("PMU_CYCLES", None);
+                    }
+                }
+            }
+        }
+
+        build.compile("cycle_counter");
+
+        println!("cargo:rustc-link-lib=static=cycle_counter");
+    }
 }
 
 fn read_env(key: &str) -> bool {

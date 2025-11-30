@@ -41,6 +41,7 @@ default = ["std", "mlkem512", "mlkem768", "mlkem1024", "rand"]
 # and enables the features when they are available.
 simd128 = ["libcrux-sha3/simd128", "libcrux-intrinsics/simd128"]
 simd256 = ["libcrux-sha3/simd256", "libcrux-intrinsics/simd256"]
+neonasm = ["libcrux-sha3/simd128"]
 
 # Features for the different key sizes of ML-KEM
 mlkem512 = []
@@ -67,9 +68,28 @@ serde = { version = "1.0", features = ["derive"] }
 hex = { version = "0.4.3", features = ["serde"] }
 criterion = "0.5"
 
+[build-dependencies]
+cc = "1.0"
+
 [[bench]]
 name = "ml-kem"
 harness = false
+
+[[bench]]
+name = "ml-kem-cycle-bench-512-portable"
+harness = false
+
+[[bench]]
+name = "ml-kem-cycle-bench-512-neon"
+harness = false
+
+[[bench]]
+name = "ml-kem-cycle-bench-512-neonasm"
+harness = false
+
+[[bin]]
+name = "cycle-bench-neon"
+path = "src/bin/cycle-bench-neon.rs"
 
 [[example]]
 name = "encapsulate"

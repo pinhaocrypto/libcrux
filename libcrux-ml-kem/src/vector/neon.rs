@@ -1,13 +1,13 @@
 //! Vectors for libcrux using aarch64 (neon) intrinsics
 
 use super::{Operations, FIELD_MODULUS};
-
 // mod sampling;
 mod arithmetic;
 mod compress;
 mod ntt;
 mod serialize;
 mod vector_type;
+
 
 use arithmetic::*;
 use compress::*;

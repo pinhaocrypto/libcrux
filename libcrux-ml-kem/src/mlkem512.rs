@@ -411,6 +411,9 @@ instantiate! {portable, ind_cca::instantiations::portable, vector::portable::Por
 instantiate! {avx2, ind_cca::instantiations::avx2, vector::SIMD256Vector, "AVX2 Optimised ML-KEM 512"}
 #[cfg(feature = "simd128")]
 instantiate! {neon, ind_cca::instantiations::neon, vector::SIMD128Vector, "Neon Optimised ML-KEM 512"}
+#[cfg(all(feature = "simd128", feature = "neonasm"))]
+instantiate! {neonasm, ind_cca::instantiations::neonasm, vector::SIMD128Vector, "Neon Optimised Assembly ML-KEM 512"}
+
 
 /// Validate a public key.
 ///
